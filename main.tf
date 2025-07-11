@@ -1,6 +1,7 @@
 provider "aws" {
-  region = "ap-south-1"  # Change to your preferred region
+  region = var.region
 }
+
 resource "aws_security_group" "alb_sg" {
   name        = "alb-sg"
   description = "Allow HTTP traffic"
@@ -42,31 +43,34 @@ resource "aws_security_group" "ec2_sg" {
 }
 
 resource "aws_instance" "openproject" {
-  ami           = "ami-0d03cb826412c6b0f"  # Amazon Linux 2 AMI (update if needed)
+  ami           = var.ami_id
   instance_type = "t3.medium"
-  key_name      = "mumbai-new-aws-key"         # Replace with your EC2 key pair name
+  key_name      = var.key_name
+  subnet_id     = aws_subnet.public_a.id
+  security_groups = [aws_security_group.ec2_sg.id]
 
   user_data = <<-EOF
-              #!/bin/bash
-                sudo su
-                yum update -y
-                yum install docker -y
-                service docker start
-                systemctl enable docker
-                sleep 10
-                docker run -d -p 80:80 -e OPENPROJECT_SECRET_KEY_BASE=secret -e OPENPROJECT_HOST__NAME=0.0.0.0:80 -e OPENPROJECT_HTTPS=false openproject/community:12
+                  #!/bin/bash
+                    sudo su
+                    yum update -y
+                    yum install docker -y
+                    service docker start
+                    systemctl enable docker
+                    sleep 10
+                    docker run -d -p 80:80 -e OPENPROJECT_SECRET_KEY_BASE=secret -e OPENPROJECT_HOST__NAME=0.0.0.0:80 -e OPENPROJECT_HTTPS=false openproject/community:12
               EOF
 
   tags = {
     Name = "OpenProject-Docker"
   }
 }
+
 resource "aws_lb" "openproject_alb" {
   name               = "openproject-alb"
   internal           = false
   load_balancer_type = "application"
   security_groups    = [aws_security_group.alb_sg.id]
-  subnets            = [aws_subnet.public.id]
+  subnets            = [aws_subnet.public_a.id, aws_subnet.public_b.id]
 
   tags = {
     Name = "OpenProject-ALB"
@@ -106,4 +110,3 @@ resource "aws_lb_target_group_attachment" "openproject_attachment" {
   target_id        = aws_instance.openproject.id
   port             = 8080
 }
-
