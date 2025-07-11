@@ -9,11 +9,13 @@ resource "aws_instance" "openproject" {
 
   user_data = <<-EOF
               #!/bin/bash
-              sudo yum update -y
-              sudo amazon-linux-extras install docker -y
-              sudo service docker start
-              sudo usermod -a -G docker ec2-user
-              docker run -d -p 8080:80 openproject/community:latest
+                sudo su
+                yum update -y
+                yum install docker -y
+                service docker start
+                systemctl enable docker
+                sleep 10
+                docker run -d -p 80:80 -e OPENPROJECT_SECRET_KEY_BASE=secret -e OPENPROJECT_HOST__NAME=0.0.0.0:80 -e OPENPROJECT_HTTPS=false openproject/community:12
               EOF
 
   tags = {
