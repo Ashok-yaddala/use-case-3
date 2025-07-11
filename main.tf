@@ -3,8 +3,8 @@ provider "aws" {
 }
 
 resource "aws_instance" "openproject" {
-  ami           = "ami-0c55b159cbfafe1f0"  # Amazon Linux 2 AMI (update if needed)
-  instance_type = "t2.medium"
+  ami           = "ami-0d03cb826412c6b0f"  # Amazon Linux 2 AMI (update if needed)
+  instance_type = "t2.micro"
   key_name      = "mumbai-new-aws-key"         # Replace with your EC2 key pair name
 
   user_data = <<-EOF
