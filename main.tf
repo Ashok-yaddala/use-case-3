@@ -1,6 +1,45 @@
 provider "aws" {
   region = "ap-south-1"  # Change to your preferred region
 }
+resource "aws_security_group" "alb_sg" {
+  name        = "alb-sg"
+  description = "Allow HTTP traffic"
+  vpc_id      = aws_vpc.main.id
+
+  ingress {
+    from_port   = 80
+    to_port     = 80
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+}
+
+resource "aws_security_group" "ec2_sg" {
+  name        = "ec2-sg"
+  description = "Allow traffic from ALB"
+  vpc_id      = aws_vpc.main.id
+
+  ingress {
+    from_port       = 8080
+    to_port         = 8080
+    protocol        = "tcp"
+    security_groups = [aws_security_group.alb_sg.id]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+}
 
 resource "aws_instance" "openproject" {
   ami           = "ami-0d03cb826412c6b0f"  # Amazon Linux 2 AMI (update if needed)
@@ -22,7 +61,49 @@ resource "aws_instance" "openproject" {
     Name = "OpenProject-Docker"
   }
 }
+resource "aws_lb" "openproject_alb" {
+  name               = "openproject-alb"
+  internal           = false
+  load_balancer_type = "application"
+  security_groups    = [aws_security_group.alb_sg.id]
+  subnets            = [aws_subnet.public.id]
 
-output "openproject_url" {
-  value = "http://${aws_instance.openproject.public_ip}:8080"
+  tags = {
+    Name = "OpenProject-ALB"
+  }
 }
+
+resource "aws_lb_target_group" "openproject_tg" {
+  name     = "openproject-tg"
+  port     = 8080
+  protocol = "HTTP"
+  vpc_id   = aws_vpc.main.id
+
+  health_check {
+    path                = "/"
+    port                = "8080"
+    protocol            = "HTTP"
+    interval            = 30
+    timeout             = 5
+    healthy_threshold   = 2
+    unhealthy_threshold = 2
+  }
+}
+
+resource "aws_lb_listener" "http" {
+  load_balancer_arn = aws_lb.openproject_alb.arn
+  port              = 80
+  protocol          = "HTTP"
+
+  default_action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.openproject_tg.arn
+  }
+}
+
+resource "aws_lb_target_group_attachment" "openproject_attachment" {
+  target_group_arn = aws_lb_target_group.openproject_tg.arn
+  target_id        = aws_instance.openproject.id
+  port             = 8080
+}
+
