@@ -1,112 +1,63 @@
 provider "aws" {
-  region = var.region
+ region = "ap-south-1"
 }
-
-resource "aws_security_group" "alb_sg" {
-  name        = "alb-sg"
-  description = "Allow HTTP traffic"
-  vpc_id      = aws_vpc.main.id
-
-  ingress {
-    from_port   = 80
-    to_port     = 80
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
+resource "aws_key_pair" "openproject_key" {
+ key_name   = "openproject-key"
+ public_key = file("~/.ssh/openproject-key.pub") # Change path if needed
 }
-
-resource "aws_security_group" "ec2_sg" {
-  name        = "ec2-sg"
-  description = "Allow traffic from ALB"
-  vpc_id      = aws_vpc.main.id
-
-  ingress {
-    from_port       = 8080
-    to_port         = 8080
-    protocol        = "tcp"
-    security_groups = [aws_security_group.alb_sg.id]
-  }
-
-  egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
+resource "aws_vpc" "main" {
+ cidr_block = "10.0.0.0/16"
 }
-
+resource "aws_internet_gateway" "gw" {
+ vpc_id = aws_vpc.main.id
+}
+resource "aws_subnet" "public" {
+ vpc_id                  = aws_vpc.main.id
+ cidr_block              = "10.0.1.0/24"
+ map_public_ip_on_launch = true
+}
+resource "aws_route_table" "rt" {
+ vpc_id = aws_vpc.main.id
+ route {
+   cidr_block = "0.0.0.0/0"
+   gateway_id = aws_internet_gateway.gw.id
+ }
+}
+resource "aws_route_table_association" "rta" {
+ subnet_id      = aws_subnet.public.id
+ route_table_id = aws_route_table.rt.id
+}
+resource "aws_security_group" "openproject_sg" {
+ name   = "openproject-sg"
+ vpc_id = aws_vpc.main.id
+ ingress {
+   from_port   = 80
+   to_port     = 80
+   protocol    = "tcp"
+   cidr_blocks = ["0.0.0.0/0"]
+ }
+ egress {
+   from_port   = 0
+   to_port     = 0
+   protocol    = "-1"
+   cidr_blocks = ["0.0.0.0/0"]
+ }
+}
 resource "aws_instance" "openproject" {
-  ami           = var.ami_id
-  instance_type = "t3.medium"
-  key_name      = var.key_name
-  subnet_id     = aws_subnet.public_a.id
-  security_groups = [aws_security_group.ec2_sg.id]
-
-  user_data = <<-EOF
-                  #!/bin/bash
-                    sudo su
-                    yum update -y
-                    yum install docker -y
-                    service docker start
-                    systemctl enable docker
-                    sleep 10
-                    docker run -d -p 80:80 -e OPENPROJECT_SECRET_KEY_BASE=secret -e OPENPROJECT_HOST__NAME=0.0.0.0:80 -e OPENPROJECT_HTTPS=false openproject/community:12
-              EOF
-
-  tags = {
-    Name = "OpenProject-Docker"
-  }
-}
-
-resource "aws_lb" "openproject_alb" {
-  name               = "openproject-alb"
-  internal           = false
-  load_balancer_type = "application"
-  security_groups    = [aws_security_group.alb_sg.id]
-  subnets            = [aws_subnet.public_a.id, aws_subnet.public_b.id]
-
-  tags = {
-    Name = "OpenProject-ALB"
-  }
-}
-
-resource "aws_lb_target_group" "openproject_tg" {
-  name     = "openproject-tg"
-  port     = 8080
-  protocol = "HTTP"
-  vpc_id   = aws_vpc.main.id
-
-  health_check {
-    path                = "/"
-    port                = "8080"
-    protocol            = "HTTP"
-    interval            = 30
-    timeout             = 5
-    healthy_threshold   = 2
-    unhealthy_threshold = 2
-  }
-}
-
-resource "aws_lb_listener" "http" {
-  load_balancer_arn = aws_lb.openproject_alb.arn
-  port              = 80
-  protocol          = "HTTP"
-
-  default_action {
-    type             = "forward"
-    target_group_arn = aws_lb_target_group.openproject_tg.arn
-  }
-}
-
-resource "aws_lb_target_group_attachment" "openproject_attachment" {
-  target_group_arn = aws_lb_target_group.openproject_tg.arn
-  target_id        = aws_instance.openproject.id
-  port             = 8080
+ ami                    = "ami-0f918f7e67a3323f0" # Ubuntu 22.04 LTS for ap-south-1
+ instance_type          = "t2.medium"
+ subnet_id              = aws_subnet.public.id
+ vpc_security_group_ids = [aws_security_group.openproject_sg.id]
+ key_name               = aws_key_pair.openproject_key.key_name
+ user_data = <<-EOF
+             #!/bin/bash
+             apt-get update -y
+             apt-get install -y docker.io
+             systemctl start docker
+             systemctl enable docker
+             docker run -d -p 80:80 openproject/community:latest
+             EOF
+ tags = {
+   Name = "OpenProject-Server"
+ }
 }
