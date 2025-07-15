@@ -44,15 +44,18 @@ jobs:
     - name: Terraform plan (Create EC2)
       run: terraform plan
 
-    - name: Install tflint
+    - name: Install TFLint
       run: |
-             curl -s https://raw.githubusercontent.com/terraform-linters/tflint/master/install_linux.sh | bash
+       curl -s https://raw.githubusercontent.com/terraform-linters/tflint/master/install_linux.sh | bash
 
-    - name: Run tflint with custom config
+    - name: Install TFLint AWS Plugin
       run: |
-          echo "Using custom rules from .tflint.hcl"
-          tflint --config=./.tflint.hcl
-      continue-on-error: true
+       tflint --init
+    - name: Run TFLint with custom config
+      run: |
+       echo "Using custom rules from .tflint.hcl"
+       tflint --config=./.tflint.hcl
+       continue-on-error: true
 
     - name: Terraform Apply (Create EC2)
       run: terraform apply -auto-approve
