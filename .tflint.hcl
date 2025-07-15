@@ -1,5 +1,6 @@
 plugin "aws" {
   enabled = true
+  region = "us-east-1"
 }
  
 rule "terraform_version" {
@@ -10,7 +11,7 @@ rule "terraform_version" {
 rule "aws_s3_bucket_versioning" {
   enabled = true
   message = "S3 buckets must have versioning enabled."
-  check = {
+  check = { 
     resource = "aws_s3_bucket"
     key      = "versioning"
     value    = "Enabled"
