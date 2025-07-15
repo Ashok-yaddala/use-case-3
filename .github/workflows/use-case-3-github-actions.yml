@@ -1,0 +1,71 @@
+name: EC2 Launching using Terraform code
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+permissions:
+  id-token: write  
+  contents: write   
+
+jobs:
+  deploy:
+    name: Terraform Infra using EC2
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout Repository
+      uses: actions/checkout@v3
+      with:
+        refs: use-case-2
+
+    - name: Configure AWS credentials via OIDC
+      uses: aws-actions/configure-aws-credentials@v2
+      with:
+        role-to-assume: arn:aws:iam::173003893026:role/OIDC-github-actions
+        aws-region: us-east-1
+
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v2
+      with:
+        terraform_version: 1.5.7  # or your preferred version
+
+    - name: Terraform formtat (Create EC2)
+      run: terraform fmt
+        
+
+    - name: Terraform init (Create EC2)
+      run: terraform init
+        
+    - name: Terraform validate 
+      run: terraform validate 
+
+    - name: Terraform plan (Create EC2)
+      run: terraform plan
+
+    - name: Install tflint
+      run: |
+             curl -s https://raw.githubusercontent.com/terraform-linters/tflint/master/install_linux.sh | bash
+
+    - name: Run tflint with custom config
+      run: |
+          echo "Using custom rules from .tflint.hcl"
+          tflint --config=./.tflint.hcl
+      continue-on-error: true
+
+    - name: Terraform Apply (Create EC2)
+      run: terraform apply -auto-approve
+        
+    - name: Terraform destroy (Create EC2)
+      run: terraform destroy -auto-approve
+
+
+
+
+
+
+
+
+
+      
